@@ -1,7 +1,6 @@
-use miniquad::*;
-
 use crate::Object;
 use glam::Mat4;
+use miniquad::*;
 
 pub struct MainPipe {
     pass: RenderPass,
@@ -59,6 +58,10 @@ impl MainPipe {
         }
     }
 
+    pub fn get_output(&self) -> Texture {
+        self.output
+    }
+
     pub fn resize(&mut self, ctx: &mut Context, width: f32, height: f32) {
         let color_img = Texture::new_render_texture(
             ctx,
@@ -109,17 +112,6 @@ impl MainPipe {
         }
         ctx.end_render_pass();
     }
-
-    pub fn get_output(&self) -> Texture {
-        self.output
-    }
-}
-
-#[repr(C)]
-pub struct Uniforms {
-    pub mvp: glam::Mat4,
-    pub light_mvp: glam::Mat4,
-    pub color: glam::Vec4,
 }
 
 const VERTEX: &str = r#"#version 100
@@ -164,4 +156,11 @@ fn meta() -> ShaderMeta {
             ],
         },
     }
+}
+
+#[repr(C)]
+pub struct Uniforms {
+    pub mvp: glam::Mat4,
+    pub light_mvp: glam::Mat4,
+    pub color: glam::Vec4,
 }

@@ -1,36 +1,10 @@
+use glam::{Mat4, Vec2, Vec3, Vec4};
 use miniquad::*;
 
-use glam::{Mat4, Vec2, Vec3, Vec4};
-
-pub fn sphere_bindings(ctx: &mut Context) -> (Bindings, u16) {
-    let (vertices, indices, max_verts) = sphere_verts();
-    (bindings(ctx, (&vertices, &indices)), max_verts)
-}
-
-fn bindings(ctx: &mut Context, verts: (&[f32], &[u16])) -> Bindings {
-    let (vertices, indices) = verts;
-    let vertex_buffer = Buffer::immutable(ctx, BufferType::VertexBuffer, &vertices);
-    let index_buffer = Buffer::immutable(ctx, BufferType::IndexBuffer, &indices);
-
-    Bindings {
-        vertex_buffers: vec![vertex_buffer],
-        index_buffer: index_buffer,
-        images: vec![],
-    }
-}
-
-fn sphere_verts() -> (Vec<f32>, Vec<u16>, u16) {
-    let (vertices, indices) = octahedral_verts();
-    let mut vertices_out = Vec::<f32>::from(vertices);
-    let mut indices_out = Vec::<u16>::from(indices);
-    let mut max_verts = 0;
-    for _ in 0..3 {
-        let (vo, io, mv) = divide_all(&vertices_out, &indices_out);
-        vertices_out = vo;
-        indices_out = io;
-        max_verts = mv;
-    }
-    (vertices_out, indices_out, max_verts)
+pub struct Object {
+    pub drawable: Drawable,
+    pub start: i32,
+    pub end: i32,
 }
 
 fn octahedral_verts() -> (&'static [f32], &'static [u16]) {
@@ -85,6 +59,25 @@ fn octahedral_verts() -> (&'static [f32], &'static [u16]) {
     (vertices, indices)
 }
 
+fn sphere_verts() -> (Vec<f32>, Vec<u16>, u16) {
+    let (vertices, indices) = octahedral_verts();
+    let mut vertices_out = Vec::<f32>::from(vertices);
+    let mut indices_out = Vec::<u16>::from(indices);
+    let mut max_verts = 0;
+    for _ in 0..3 {
+        let (vo, io, mv) = divide_all(&vertices_out, &indices_out);
+        vertices_out = vo;
+        indices_out = io;
+        max_verts = mv;
+    }
+    (vertices_out, indices_out, max_verts)
+}
+
+pub struct Drawable {
+    pub model: Mat4,
+    pub color: Vec4,
+}
+
 fn divide_all(vertices: &[f32], indices: &[u16]) -> (Vec<f32>, Vec<u16>, u16) {
     let mut vertices_out = Vec::<f32>::new();
     let mut indices_out = Vec::<u16>::new();
@@ -132,6 +125,26 @@ fn divide_one(vertices: &[f32], indices: &[u16]) -> (Vec<f32>, Vec<u16>, u16) {
     (vertices_out, indices_out, max_verts)
 }
 
+//from https://sites.google.com/site/dlampetest/python/triangulating-a-sphere-recursively
+// Subdivide each triangle in the old approximation and normalize
+//  the new points thus generated to lie on the surface of the unit
+//  sphere.
+// Each input triangle with vertices labelled [0,1,2] as shown
+//  below will be turned into four new triangles:
+//
+//            Make new points
+//                 a = (0+2)/2
+//                 b = (0+1)/2
+//                 c = (1+2)/2
+//        1
+//       /\        Normalize a, b, c
+//      /  \
+//    b/____\ c    Construct new new triangles
+//    /\    /\       t1 [0,b,a]
+//   /  \  /  \      t2 [b,1,c]
+//  /____\/____\     t3 [a,b,c]
+// 0      a     2    t4 [a,c,2]
+
 fn average_vert(a: &[f32], b: &[f32]) -> Vec<f32> {
     let pos_a = Vec3::from_slice(&a[0..3]);
     let col_a = Vec4::from_slice(&a[3..7]);
@@ -146,13 +159,19 @@ fn average_vert(a: &[f32], b: &[f32]) -> Vec<f32> {
     vec![pos.x, pos.y, pos.z, col.x, col.y, col.z, col.w, uv.x, uv.y]
 }
 
-pub struct Object {
-    pub drawable: Drawable,
-    pub start: i32,
-    pub end: i32,
+fn bindings(ctx: &mut Context, verts: (&[f32], &[u16])) -> Bindings {
+    let (vertices, indices) = verts;
+    let vertex_buffer = Buffer::immutable(ctx, BufferType::VertexBuffer, &vertices);
+    let index_buffer = Buffer::immutable(ctx, BufferType::IndexBuffer, &indices);
+
+    Bindings {
+        vertex_buffers: vec![vertex_buffer],
+        index_buffer: index_buffer,
+        images: vec![],
+    }
 }
 
-pub struct Drawable {
-    pub model: Mat4,
-    pub color: Vec4,
+pub fn sphere_bindings(ctx: &mut Context) -> (Bindings, u16) {
+    let (vertices, indices, max_verts) = sphere_verts();
+    (bindings(ctx, (&vertices, &indices)), max_verts)
 }

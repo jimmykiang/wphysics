@@ -1,13 +1,13 @@
+use glam::{vec3, EulerRot, Mat4};
+use miniquad::*;
+
 mod engine;
 mod main_pipe;
 mod objects;
-
-use engine::Scene;
-use glam::{vec3, EulerRot, Mat4};
-use main_pipe::MainPipe;
-use miniquad::*;
 use objects::Object;
 use wphysics::quad_verts;
+
+use crate::main_pipe::MainPipe;
 
 struct PipeBind {
     pipe: Pipeline,
@@ -19,7 +19,7 @@ struct Stage {
     main_bind: Bindings,
     verts_per_draw: u16,
     copy: PipeBind,
-    scene: Scene,
+    scene: engine::Scene,
     rx: f32,
     ry: f32,
 }
@@ -32,7 +32,7 @@ impl Stage {
         let main_bind = bind.clone();
 
         let copy = copy_pipe(ctx, main.get_output());
-        let scene = Scene::new_cover();
+        let scene = engine::Scene::new_simple_scene();
 
         Stage {
             main,
@@ -123,9 +123,9 @@ fn copy_pipe(ctx: &mut Context, tex: Texture) -> PipeBind {
 
     let shader = Shader::new(
         ctx,
-        copy_to_screen_shader::VERTEX,
-        copy_to_screen_shader::FRAGMENT,
-        copy_to_screen_shader::meta(),
+        base_shaders::VERTEX,
+        base_shaders::FRAGMENT,
+        base_shaders::meta(),
     )
     .unwrap();
 
@@ -142,7 +142,13 @@ fn copy_pipe(ctx: &mut Context, tex: Texture) -> PipeBind {
     PipeBind { pipe, bind }
 }
 
-mod copy_to_screen_shader {
+fn main() {
+    miniquad::start(conf::Conf::default(), |mut ctx| {
+        Box::new(Stage::new(&mut ctx))
+    });
+}
+
+mod base_shaders {
     use miniquad::*;
 
     pub const VERTEX: &str = r#"#version 100
@@ -175,10 +181,4 @@ mod copy_to_screen_shader {
             uniforms: UniformBlockLayout { uniforms: vec![] },
         }
     }
-}
-
-fn main() {
-    miniquad::start(conf::Conf::default(), |mut ctx| {
-        Box::new(Stage::new(&mut ctx))
-    });
 }

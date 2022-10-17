@@ -8,5 +8,4 @@ edition = "2021"
 [dependencies]
 miniquad = "0.3.13"
 glam = "0.21.3"
-rand = "0.8.5"
 
