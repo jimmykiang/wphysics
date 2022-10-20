@@ -2,15 +2,16 @@ use crate::objects::Drawable;
 use glam::{Mat3, Mat4, Quat, Vec3, Vec4};
 use std::any::Any;
 
-trait Shaped {
-    fn shape_type(&self) -> Shape;
+trait Shape {
+    fn shape_type(&self) -> ShapeEnum;
     fn color(&self) -> Vec4;
     fn radius(&self) -> f32;
     fn as_any(&self) -> &dyn Any;
+    fn get_centre_of_mass(&self) -> Vec3;
 }
 
 #[derive(PartialEq)]
-enum Shape {
+enum ShapeEnum {
     Sphere,
 }
 
@@ -19,9 +20,9 @@ struct Sphere {
     color: Vec4,
 }
 
-impl Shaped for Sphere {
-    fn shape_type(&self) -> Shape {
-        Shape::Sphere
+impl Shape for Sphere {
+    fn shape_type(&self) -> ShapeEnum {
+        ShapeEnum::Sphere
     }
 
     fn color(&self) -> Vec4 {
@@ -35,12 +36,50 @@ impl Shaped for Sphere {
     fn as_any(&self) -> &dyn Any {
         self
     }
+
+    fn get_centre_of_mass(&self) -> Vec3 {
+        Vec3::ZERO
+    }
 }
 
 pub struct Body {
     pub position: Vec3,
     pub orientation: Quat,
-    shape: Box<dyn Shaped>,
+    pub inv_mass: f32,
+    pub linear_velocity: Vec3,
+    shape: Box<dyn Shape>,
+}
+
+impl Body {
+    fn get_centre_of_mass_world_space(&self) -> Vec3 {
+        let com = self.shape.get_centre_of_mass();
+        self.position + self.orientation.mul_vec3(com)
+    }
+
+    fn get_centre_of_mass_model_space(&self) -> Vec3 {
+        self.shape.get_centre_of_mass()
+    }
+
+    fn world_space_to_body_space(&self, world_pt: Vec3) -> Vec3 {
+        self.orientation
+            .inverse()
+            .mul_vec3(world_pt - self.get_centre_of_mass_world_space())
+    }
+
+    fn body_space_to_world_space(&self, body_pt: Vec3) -> Vec3 {
+        self.get_centre_of_mass_world_space() + self.orientation.mul_vec3(body_pt)
+    }
+
+    fn apply_impulse_linear(&mut self, impulse: Vec3) {
+        if self.inv_mass == 0. {
+            return;
+        }
+        self.linear_velocity += impulse * self.inv_mass;
+    }
+
+    fn update(&mut self, dt_sec: f32) {
+        self.position += self.linear_velocity * dt_sec;
+    }
 }
 
 pub struct Scene {
@@ -55,10 +94,12 @@ impl Scene {
         let x = 0.;
         let z = 0.;
         let y = 10.;
-        let color = Vec4::new(1.0, 0.2, 0.2, 1.0);
+        let color = Vec4::new(1.0, 0.3, 1.0, 1.0);
         bodies.push(Body {
             position: Vec3::new(z, y, x),
             orientation: Quat::IDENTITY,
+            inv_mass: 1.0,
+            linear_velocity: Vec3::ZERO,
             shape: Box::new(Sphere { radius, color }),
         });
 
@@ -71,6 +112,8 @@ impl Scene {
         bodies.push(Body {
             position: Vec3::new(z, y, x),
             orientation: Quat::IDENTITY,
+            linear_velocity: Vec3::ZERO,
+            inv_mass: 0.,
             shape: Box::new(Sphere { radius, color }),
         });
         Scene { bodies }
@@ -90,5 +133,17 @@ impl Scene {
         objects
     }
 
-    pub fn update(&mut self, dt_sec: f32) {}
+    pub fn update(&mut self, dt_sec: f32) {
+        // Gravity impulse.
+        for body in &mut self.bodies {
+            let mass = 1. / body.inv_mass;
+            let impulse_gravity = Vec3::new(0., -10., 0.) * mass * dt_sec;
+            body.apply_impulse_linear(impulse_gravity);
+        }
+
+        // position update
+        for body in &mut self.bodies {
+            body.update(dt_sec);
+        }
+    }
 }
