@@ -51,6 +51,10 @@ pub struct Body {
 }
 
 impl Body {
+    fn radius(&self) -> f32 {
+        self.shape.radius()
+    }
+
     fn get_centre_of_mass_world_space(&self) -> Vec3 {
         let com = self.shape.get_centre_of_mass();
         self.position + self.orientation.mul_vec3(com)
@@ -141,9 +145,40 @@ impl Scene {
             body.apply_impulse_linear(impulse_gravity);
         }
 
+        // Check for collisions with other bodies.
+
+        for i in 0..self.bodies.len() {
+            for j in (i + 1)..self.bodies.len() {
+                let body_a = &self.bodies[i];
+                let body_b = &self.bodies[j];
+
+                if body_a.inv_mass == 0.0 && body_b.inv_mass == 0.0 {
+                    continue;
+                }
+
+                if let Some(contact) = intersect(body_a, body_b) {
+                    self.bodies[i].linear_velocity = Vec3::ZERO;
+                    self.bodies[j].linear_velocity = Vec3::ZERO;
+                }
+            }
+        }
+
         // position update
         for body in &mut self.bodies {
             body.update(dt_sec);
         }
     }
+}
+
+struct Contact {}
+
+fn intersect(body_a: &Body, body_b: &Body) -> Option<Contact> {
+    let ab = body_a.position - body_b.position;
+    let radius_ab = body_a.radius() + body_b.radius();
+    let length_square = ab.length();
+
+    if length_square <= (radius_ab) {
+        return Some(Contact {});
+    }
+    None
 }

@@ -74,11 +74,7 @@ impl EventHandler for Stage {
         );
         let light_view_proj = proj * light_view;
 
-        //self.rx += 0.01;
-        //self.ry += 0.01;
         let model = Mat4::from_euler(EulerRot::YXZ, self.ry, self.rx, 0.);
-
-        //let (w, h) = ctx.screen_size();
 
         let drawables = self.scene.drawables();
         let mut objects = Vec::<Object>::new();
