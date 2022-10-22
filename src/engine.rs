@@ -47,7 +47,7 @@ pub struct Body {
     pub orientation: Quat,
     pub inv_mass: f32,
     pub linear_velocity: Vec3,
-    shape: Box<dyn Shape>,
+    pub shape: Box<dyn Shape>,
 }
 
 impl Body {
@@ -156,9 +156,8 @@ impl Scene {
                     continue;
                 }
 
-                if let Some(contact) = intersect(body_a, body_b) {
-                    self.bodies[i].linear_velocity = Vec3::ZERO;
-                    self.bodies[j].linear_velocity = Vec3::ZERO;
+                if let Some(contact) = intersect(&mut self.bodies, i, j) {
+                    resolve_contact(&mut self.bodies, &contact);
                 }
             }
         }
@@ -170,15 +169,61 @@ impl Scene {
     }
 }
 
-struct Contact {}
+struct Contact {
+    pt_on_a_world_space: Vec3,
+    pt_on_b_world_space: Vec3,
+    pt_on_a_local_space: Vec3,
+    pt_on_b_local_space: Vec3,
+    normal: Vec3,
+    separation_distance: f32,
+    time_of_impact: f32,
+    body_a: usize,
+    body_b: usize,
+}
 
-fn intersect(body_a: &Body, body_b: &Body) -> Option<Contact> {
-    let ab = body_a.position - body_b.position;
-    let radius_ab = body_a.radius() + body_b.radius();
+fn intersect(bodies: &mut [Body], i: usize, j: usize) -> Option<Contact> {
+    let body_a = &bodies[i];
+    let body_b = &bodies[j];
+
+    let ab = (body_b.position - body_a.position);
+    let normal = ab.normalize();
+
+    let sphere_a = &body_a.shape;
+    let sphere_b = &body_b.shape;
+
+    let pt_on_a_world_space = body_a.position + normal * sphere_a.radius();
+    let pt_on_b_world_space = body_b.position - normal * sphere_b.radius();
+
+    let radius_ab = sphere_a.radius() + sphere_b.radius();
     let length_square = ab.length();
 
     if length_square <= (radius_ab) {
-        return Some(Contact {});
+        return Some(Contact {
+            pt_on_a_world_space,
+            pt_on_b_world_space,
+            pt_on_a_local_space: Default::default(),
+            pt_on_b_local_space: Default::default(),
+            normal: Default::default(),
+            separation_distance: 0.0,
+            time_of_impact: 0.0,
+            body_a: i,
+            body_b: j,
+        });
     }
     None
+}
+
+fn resolve_contact(bodies: &mut [Body], contact: &Contact) {
+    bodies[contact.body_a].linear_velocity = Vec3::ZERO;
+    bodies[contact.body_b].linear_velocity = Vec3::ZERO;
+
+    let (body_a, body_b) = (&bodies[contact.body_a], &bodies[contact.body_b]);
+
+    // Let's also move our colliding objects to just outside of each other
+    let t_a = body_a.inv_mass / (body_a.inv_mass + body_b.inv_mass);
+    let t_b = body_b.inv_mass / (body_a.inv_mass + body_b.inv_mass);
+    let ds = contact.pt_on_b_world_space - contact.pt_on_a_world_space;
+
+    bodies[contact.body_a].position += ds * t_a;
+    bodies[contact.body_b].position -= ds * t_b;
 }
