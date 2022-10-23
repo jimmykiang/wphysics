@@ -47,7 +47,8 @@ pub struct Body {
     pub orientation: Quat,
     pub inv_mass: f32,
     pub linear_velocity: Vec3,
-    pub shape: Box<dyn Shape>,
+    pub elasticity: f32,
+    shape: Box<dyn Shape>,
 }
 
 impl Body {
@@ -104,6 +105,7 @@ impl Scene {
             orientation: Quat::IDENTITY,
             inv_mass: 1.0,
             linear_velocity: Vec3::ZERO,
+            elasticity: 0.5,
             shape: Box::new(Sphere { radius, color }),
         });
 
@@ -118,6 +120,7 @@ impl Scene {
             orientation: Quat::IDENTITY,
             linear_velocity: Vec3::ZERO,
             inv_mass: 0.,
+            elasticity: 1.0,
             shape: Box::new(Sphere { radius, color }),
         });
         Scene { bodies }
@@ -218,9 +221,10 @@ fn resolve_contact(bodies: &mut [Body], contact: &Contact) {
     {
         let (body_a, body_b) = (&bodies[contact.body_a], &bodies[contact.body_b]);
 
+        let elasticity = body_a.elasticity * body_b.elasticity;
         let n = contact.normal;
         let vab = body_a.linear_velocity - body_b.linear_velocity;
-        let impulse_j = -2.0 * vab.dot(n) / (body_a.inv_mass + body_b.inv_mass);
+        let impulse_j = -(1.0 + elasticity) * vab.dot(n) / (body_a.inv_mass + body_b.inv_mass);
         vec_impulse_j = n * impulse_j;
     }
 
