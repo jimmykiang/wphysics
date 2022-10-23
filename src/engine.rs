@@ -203,7 +203,7 @@ fn intersect(bodies: &mut [Body], i: usize, j: usize) -> Option<Contact> {
             pt_on_b_world_space,
             pt_on_a_local_space: Default::default(),
             pt_on_b_local_space: Default::default(),
-            normal: Default::default(),
+            normal,
             separation_distance: 0.0,
             time_of_impact: 0.0,
             body_a: i,
@@ -214,12 +214,22 @@ fn intersect(bodies: &mut [Body], i: usize, j: usize) -> Option<Contact> {
 }
 
 fn resolve_contact(bodies: &mut [Body], contact: &Contact) {
-    bodies[contact.body_a].linear_velocity = Vec3::ZERO;
-    bodies[contact.body_b].linear_velocity = Vec3::ZERO;
+    let vec_impulse_j: Vec3;
+    {
+        let (body_a, body_b) = (&bodies[contact.body_a], &bodies[contact.body_b]);
 
-    let (body_a, body_b) = (&bodies[contact.body_a], &bodies[contact.body_b]);
+        let n = contact.normal;
+        let vab = body_a.linear_velocity - body_b.linear_velocity;
+        let impulse_j = -2.0 * vab.dot(n) / (body_a.inv_mass + body_b.inv_mass);
+        vec_impulse_j = n * impulse_j;
+    }
+
+    bodies[contact.body_a].apply_impulse_linear(vec_impulse_j * 1.0);
+    bodies[contact.body_b].apply_impulse_linear(vec_impulse_j * -1.0);
 
     // Let's also move our colliding objects to just outside of each other
+    let (body_a, body_b) = (&bodies[contact.body_a], &bodies[contact.body_b]);
+
     let t_a = body_a.inv_mass / (body_a.inv_mass + body_b.inv_mass);
     let t_b = body_b.inv_mass / (body_a.inv_mass + body_b.inv_mass);
     let ds = contact.pt_on_b_world_space - contact.pt_on_a_world_space;
