@@ -6,6 +6,7 @@ mod main_pipe;
 mod objects;
 use objects::Object;
 use wphysics::quad_verts;
+mod contact;
 
 use crate::main_pipe::MainPipe;
 
