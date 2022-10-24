@@ -55,6 +55,7 @@ pub struct Body {
     pub linear_velocity: Vec3,
     pub angular_velocity: Vec3,
     pub elasticity: f32,
+    pub friction: f32,
     shape: Box<dyn Shape>,
 }
 
@@ -64,8 +65,8 @@ impl Body {
     }
 
     fn get_centre_of_mass_world_space(&self) -> Vec3 {
-        let com = self.shape.get_centre_of_mass();
-        self.position + self.orientation.mul_vec3(com)
+        let center_of_mass = self.shape.get_centre_of_mass();
+        self.position + self.orientation.mul_vec3(center_of_mass)
     }
 
     fn get_centre_of_mass_model_space(&self) -> Vec3 {
@@ -99,7 +100,7 @@ impl Body {
         orient * inv_t * orient.transpose()
     }
 
-    fn apply_impluse_angular(&mut self, impulse: Vec3) {
+    fn apply_impulse_angular(&mut self, impulse: Vec3) {
         if self.inv_mass == 0. {
             return;
         }
@@ -126,7 +127,7 @@ impl Body {
         // applying impulses must produce torques through the center of mass
         let r = impulse_point - self.get_centre_of_mass_world_space();
         // this is in world space
-        self.apply_impluse_angular(r.cross(impulse));
+        self.apply_impulse_angular(r.cross(impulse));
     }
 
     fn update(&mut self, dt_sec: f32) {
@@ -170,8 +171,8 @@ impl Scene {
         let mut bodies = Vec::<Body>::new();
         // dynamic bodies
         let radius = 2.0;
-        let x = 1.;
-        let z = 1.;
+        let x = 2.0;
+        let z = 7.0;
         let y = 10.;
         let color = Vec4::new(1.0, 0.3, 1.0, 1.0);
         bodies.push(Body {
@@ -180,7 +181,8 @@ impl Scene {
             inv_mass: 1.0,
             linear_velocity: Vec3::ZERO,
             angular_velocity: Vec3::ZERO,
-            elasticity: 0.5,
+            elasticity: 0.7,
+            friction: 0.8,
             shape: Box::new(Sphere { radius, color }),
         });
 
@@ -197,6 +199,7 @@ impl Scene {
             angular_velocity: Vec3::ZERO,
             inv_mass: 0.,
             elasticity: 1.0,
+            friction: 0.5,
             shape: Box::new(Sphere { radius, color }),
         });
         Scene { bodies }
@@ -316,13 +319,38 @@ fn resolve_contact(bodies: &mut [Body], contact: &Contact) {
         let vel_b = body_b.linear_velocity + body_b.angular_velocity.cross(rb);
 
         // Calculate the collision impulse.
-        let vab = body_a.linear_velocity - body_b.linear_velocity;
-        let impulse_j = -(1.0 + elasticity) * vab.dot(n) / (body_a.inv_mass + body_b.inv_mass);
+        let vab = vel_a - vel_b;
+        let impulse_j =
+            (1.0 + elasticity) * vab.dot(n) / (body_a.inv_mass + body_b.inv_mass + angular_factor);
         vec_impulse_j = n * impulse_j;
+
+        // Calculate the impulse caused by friction.
+        let friction = body_a.friction * body_b.friction;
+
+        // Find the normal direction of the velocity with respect to the normal of the collision.
+        let vel_norm = n * n.dot(vab);
+
+        // Find the tangent direction of the velocity with respect to the normal of the collision.
+        let vel_tang = vab - vel_norm;
+
+        // Get the tangential velocities relative to the other body.
+        let relative_vel_tang = vel_tang.normalize_or_zero();
+
+        let inertia_a = (inv_world_inertia_a * ra.cross(relative_vel_tang)).cross(ra);
+        let inertia_b = (inv_world_inertia_b * rb.cross(relative_vel_tang)).cross(rb);
+        let inv_inertia = (inertia_a + inertia_b).dot(relative_vel_tang);
+
+        // Calculate the tangential impulse for friction.
+        let reduced_mass = 1. / (body_a.inv_mass + body_b.inv_mass + inv_inertia);
+        impulse_friction = vel_tang * reduced_mass * friction;
     }
 
-    bodies[contact.body_a].apply_impulse_linear(vec_impulse_j * 1.0);
-    bodies[contact.body_b].apply_impulse_linear(vec_impulse_j * -1.0);
+    bodies[contact.body_a].apply_impulse(pt_on_a, vec_impulse_j * -1.0);
+    bodies[contact.body_b].apply_impulse(pt_on_b, vec_impulse_j * 1.0);
+
+    // Apply kinetic friction.
+    bodies[contact.body_a].apply_impulse(pt_on_a, impulse_friction * -1.);
+    bodies[contact.body_b].apply_impulse(pt_on_b, impulse_friction * 1.);
 
     // Let's also move our colliding objects to just outside of each other
     let (body_a, body_b) = (&bodies[contact.body_a], &bodies[contact.body_b]);
